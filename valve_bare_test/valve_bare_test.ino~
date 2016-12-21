@@ -1,0 +1,99 @@
+#include<avr/interrupt.h>
+#include"valve.h"
+
+boolean VA_timeout=false,VB_timeout=false,VC_timeout=false,VD_timeout=false,send_timeout=false;
+volatile boolean flag_t1=false,flag_t2=false,flag_t3=false;
+boolean trip_stat=false;
+boolean reset_flag=false;
+volatile uint16_t isr_count=0;
+uint16_t current_sec=0;
+
+valve_status VA_stat=OPEN,VB_stat=OPEN,VC_stat,VD_stat;
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(VAP,OUTPUT);
+  pinMode(VAN,OUTPUT);
+  pinMode(VBP,OUTPUT);
+  pinMode(VBN,OUTPUT);
+  pinMode(VAOP,INPUT_PULLUP);
+  pinMode(VACL,INPUT_PULLUP);
+  pinMode(VBCL,INPUT_PULLUP);
+  pinMode(VBOP,INPUT_PULLUP);
+  noInterrupts();           // disable all interrupts
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+  OCR1A = 15625;            // 2 Seconds
+  TCCR1B |= (1 << WGM12);   // CTC mode
+  TCCR1B |= 0x05;
+  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+  interrupts();
+}
+void loop()
+{
+  if((VB_stat==CLOSE)&&(isr_count<30)&&(reset_flag==true))
+  {
+    VBOPEN;
+    current_sec=isr_count;
+    do
+    {
+      if(VBOPENED==LOW)
+      {VB_stat=OPEN;VBSTALL;break;}
+      if((current_sec+TIMEOUT)<isr_count)
+      {VB_timeout=true;trip_stat=true;}
+      Serial.println(isr_count);
+      Serial.print("Status=");
+      Serial.println(VB_stat);
+      
+    }while((VB_stat!=OPEN)&&(VB_timeout!=true));
+      Serial.print("Status=");
+      Serial.println(VB_stat);
+      if(VB_stat==OPEN)
+  {
+      TCCR1B&=~0x05;
+      TCNT1=0x0000;
+      isr_count=0;
+      TCCR1B|=0x05;
+      current_sec=isr_count;
+      while((current_sec+15)>isr_count)
+      {Serial.println(isr_count);}
+      reset_flag=false;
+  }
+  }
+    if((VB_stat==OPEN)&&(isr_count<30)&&(reset_flag==false))
+  {
+    VBCLOSE;
+    current_sec=isr_count;
+    do
+    {
+      if(VBCLOSED==LOW)
+      {VB_stat=CLOSE;VBSTALL;break;}
+      if((current_sec+TIMEOUT)<isr_count)
+      {VB_timeout=true;trip_stat=true;}
+      Serial.println(isr_count);
+      Serial.print("Status=");
+      Serial.println(VB_stat);
+      
+    }while((digitalRead(VBCLOSED))&&(VB_timeout!=true));
+      Serial.print("Status=");
+      Serial.println(VB_stat);
+    if(VB_stat==CLOSE)
+  {
+      TCCR1B&=~0x05;
+      TCNT1=0x0000;
+      isr_count=0;
+      TCCR1B|=0x05;
+      current_sec=isr_count;
+      while((current_sec+15)>isr_count)
+      {Serial.println(isr_count);}
+      reset_flag=true;
+  }
+  }
+}
+
+ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
+{
+isr_count++;
+}
+  
