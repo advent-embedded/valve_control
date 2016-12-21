@@ -2,8 +2,8 @@
 #define VALVE_H
 
 #define t1 10
-#define t2 120
-#define t3 600
+#define t2 30
+#define t3 20
 //Valve A MACROS
 #define VAN 2
 #define VAP 3
@@ -45,6 +45,8 @@
 #define VDOPENED digitalRead(VDOP)
 #define VDCLOSED digitalRead(VDCL)
 #define TIMEOUT 10
+#define TRIPPIN 19
+#define TripEnable digitalWrite(TRIPPIN,LOW)
 #define RESETTIMER1 {TCCR1B&=~0x05;TCNT1=0x0000;isr_count=0;TCCR1B|=0x05;}
 
   

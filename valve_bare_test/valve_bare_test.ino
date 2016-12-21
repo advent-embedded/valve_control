@@ -8,7 +8,7 @@ boolean flag_VA=true,flag_VB=true,flag_VC=true,flag_VD=true;
 volatile uint16_t isr_count=0;
 uint16_t current_sec=0;
 
-valve_status VA_stat=OPEN,VB_stat=CLOSE,VC_stat=CLOSE,VD_stat=OPEN;
+valve_status VA_stat=OPEN,VB_stat=OPEN,VC_stat=OPEN,VD_stat=CLOSE;
 uint8_t pos_flag=0;
 void setup()
 {

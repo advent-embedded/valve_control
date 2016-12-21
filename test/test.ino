@@ -5,10 +5,11 @@
 
 boolean VA_timeout = false, VB_timeout = false, VC_timeout = false, VD_timeout = false, send_timeout = false, return_timeout = false;
 boolean trip_status = false;
+boolean run_status=false;
 volatile uint16_t isr_count = 0;
-uint16_t current_sec = 0, counter = 0;
+uint16_t current_sec= 0, counter=0,counter_max;
 
-valve_status VA_status=CLOSE,VB_status=CLOSE,VC_status=CLOSE,VD_status=CLOSE;
+valve_status VA_stat=CLOSE,VB_stat=CLOSE,VC_stat=CLOSE,VD_stat=CLOSE;
 state pos = SEND;
 opmode mode = AUTO;
 
@@ -22,6 +23,7 @@ void setup()
   pinMode(VCN, OUTPUT);
   pinMode(VDP, OUTPUT);
   pinMode(VDN, OUTPUT);
+  pinMode(TRIPPIN,OUTPUT);
   pinMode(VACL, INPUT_PULLUP);
   pinMode(VAOP, INPUT_PULLUP);
   pinMode(VBCL, INPUT_PULLUP);
@@ -31,6 +33,7 @@ void setup()
   pinMode(VDCL, INPUT_PULLUP);
   pinMode(VDOP, INPUT_PULLUP);
   noInterrupts();           // disable all interrupts
+  //EIMSK=
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1  = 0;
@@ -47,47 +50,41 @@ void loop()
   if (mode == AUTO)
   {
     RESETTIMER1
-    if ((VA_status == CLOSE) && (VB_status == CLOSE) && (pos == SEND)&&(send_timeout!=true))
+    if ((VA_stat == CLOSE) && (VB_stat == CLOSE) && (pos == SEND)&&(send_timeout!=true))
     {
       VAOPEN;
       VBOPEN;
       current_sec = isr_count;
-      do
+       do
       {
         if (VAOPENED == LOW)
         {
-          VA_status = OPEN;
+          VA_stat = OPEN;
           VASTALL;
         }
         if (VBOPENED == LOW)
         {
-          VB_status = OPEN;
+          VB_stat = OPEN;
           VBSTALL;
         }
         if ((current_sec + TIMEOUT) < isr_count)
         {
-          send_timeout = true; trip_status = true;
+          send_timeout = true; trip_status = true;TripEnable;
         }
-        Serial.print("V1=");
-        Serial.println(VA_status);
-
-        Serial.print("V2=");
-        Serial.println(VB_status);
-
-      } while ((VA_status != CLOSE) && (VA_status != CLOSE) && (send_timeout != true));
-      if ((VA_status == OPEN) && (VB_status == OPEN))
+      }while (((VA_stat!=OPEN) || (VB_stat!=OPEN))&&(send_timeout!=true));
+      if ((VA_stat == OPEN) && (VB_stat == OPEN))
       {
 
         RESETTIMER1
         current_sec = isr_count;
-        while ((current_sec + t1) > isr_count);
+        while ((current_sec + t1) > isr_count); //Wait for T1 Period
         VACLOSE;
         current_sec = isr_count;
         do
         {
           if (VACLOSED == LOW)
           {
-            VA_status = CLOSE;
+            VA_stat = CLOSE;
             VASTALL;
             break;
           }
@@ -95,17 +92,16 @@ void loop()
           {
             VA_timeout = true;
             trip_status = true;
+            TripEnable;
           }
-          Serial.print("V1=");
-          Serial.println(VA_status);
-        } while ((VA_status != CLOSE) && (VA_timeout != true));
+        } while ((VA_stat != CLOSE)&&(VA_timeout!= true));
         VBCLOSE;
         current_sec = isr_count;
         do
         {
           if (VBCLOSED == LOW)
           {
-            VB_status = CLOSE;
+            VB_stat = CLOSE;
             VBSTALL;
             break;
           }
@@ -113,14 +109,15 @@ void loop()
           {
             VB_timeout = true;
             trip_status = true;
+            TripEnable;
           }
           Serial.print("V1=");
-          Serial.println(VA_status);
-        } while ((VB_status != CLOSE) && (VB_timeout != true));
-        if ((VA_status == CLOSE) && (VB_status == CLOSE))
+          Serial.println(VA_stat);
+        } while ((VB_stat != CLOSE) && (VB_timeout != true));
+        if ((VA_stat == CLOSE) && (VB_stat == CLOSE))
           pos = RETURN;
       }
-    }//POS=SEND
+    } //POS=SEND
 
     if ((pos == RETURN) && (trip_status != true))
     {
@@ -131,31 +128,28 @@ void loop()
       {
         if (VCOPENED == LOW)
         {
-          VC_status = OPEN;
+          VC_stat = OPEN;
           VCSTALL;
         }
         if (VDOPENED == LOW)
         {
-          VD_status = OPEN;
+          VD_stat = OPEN;
           VDSTALL;
         }
         if ((current_sec + TIMEOUT) < isr_count)
         {
-          return_timeout = true; trip_status = true;
+          return_timeout = true; trip_status = true;TripEnable;
         }
         Serial.print("V1=");
-        Serial.println(VA_status);
+        Serial.println(VA_stat);
 
         Serial.print("V2=");
-        Serial.println(VB_status);
+        Serial.println(VB_stat);
 
-      } while ((VC_status != CLOSE) && (VD_status != CLOSE) && (return_timeout != true));
-      if ((VC_status == OPEN) && (VD_status == OPEN))
+      } while (((VC_stat!=OPEN) || (VD_stat!=OPEN))&&(send_timeout!=true));
+      if ((VC_stat == OPEN) && (VD_stat == OPEN))
       {
-        TCCR1B &= ~0x05;
-        TCNT1 = 0x0000;
-        isr_count = 0;
-        TCCR1B |= 0x05;
+        RESETTIMER1
         current_sec = isr_count;
         while ((current_sec + t2) > isr_count);
         VCCLOSE;
@@ -164,7 +158,7 @@ void loop()
         {
           if (VCCLOSED == LOW)
           {
-            VC_status = CLOSE;
+            VC_stat = CLOSE;
             VCSTALL;
             break;
           }
@@ -172,17 +166,18 @@ void loop()
           {
             VC_timeout = true;
             trip_status = true;
+            TripEnable;
           }
           Serial.print("VC=");
-          Serial.println(VC_status);
-        } while ((VC_status != CLOSE) && (VC_timeout != true));
+          Serial.println(VC_stat);
+        } while ((VC_stat != CLOSE) && (VC_timeout != true));
         VDCLOSE;
         current_sec = isr_count;
         do
         {
           if (VDCLOSED == LOW)
           {
-            VD_status = CLOSE;
+            VD_stat = CLOSE;
             VDSTALL;
             break;
           }
@@ -190,28 +185,48 @@ void loop()
           {
             VD_timeout = true;
             trip_status = true;
+            TripEnable;
           }
           Serial.print("VD=");
-          Serial.println(VD_status);
-        } while ((VD_status != CLOSE) && (VD_timeout != true));
+          Serial.println(VD_stat);
+        } while ((VD_stat != CLOSE) && (VD_timeout != true));
 
       }
-      if ((VC_status == CLOSE) && (VD_status == CLOSE))
+      if ((VC_stat == CLOSE) && (VD_stat == CLOSE))
       {
-        TCCR1B &= ~0x05;
-        TCNT1 = 0x0000;
-        isr_count = 0;
-        TCCR1B |= 0x05;
+        RESETTIMER1
         current_sec = isr_count;
         while ((current_sec + t3) > isr_count);
         counter += 1;
+        if(counter==counter_max){run_status=false;}
         pos = SEND;
       }
-    }
+    } //POS=RETURN
   }//MODE=AUTO
 }//loop
 ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
 {
   ++isr_count;
 }
+ISR(INT0_vect) //Wake up from Sleep
+{
+  
+}
+ISR(INT1_vect) //Enter Power Down Mode
+{
+  
+}
+
+ISR(INT2_vect) // Trip Status triggered by Software
+{
+//Send OFF Status to BMS
+digitalWrite(TRIPPIN,HIGH);
+while(1);  
+}
+ISR(INT4_vect) //Flow Switch Interrupt,Any Logic Change Alters runmode
+{
+  run_status=!run_status;
+}
+
+
 
